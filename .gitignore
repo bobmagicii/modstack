@@ -1,0 +1,18 @@
+# typical project wide annoyances.
+
+/.phpunit.cache
+
+/env.lock
+/backups
+/build
+/mods
+/data/deploy.index
+/logs
+/temp
+/vendor
+/www/.well-known
+/www/share/atlantis
+/www/share/nui
+/www/themes/default
+
+# eof
