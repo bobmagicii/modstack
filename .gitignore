@@ -6,6 +6,7 @@
 /backups
 /build
 /mods
+/data/config.json
 /data/deploy.index
 /logs
 /temp

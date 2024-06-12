@@ -27,6 +27,11 @@ extends Console\Client {
 	public string
 	$DeployFile;
 
+	////////
+
+	protected MStackConfig
+	$Cfg;
+
 	////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////
 
@@ -159,10 +164,6 @@ extends Console\Client {
 
 		////////
 
-		$this->DestRoot = 'D:\Games\Starfield\Content';
-
-		////////
-
 		return;
 	}
 
@@ -171,8 +172,29 @@ extends Console\Client {
 	void {
 
 		$this->DeployFile = Common\Filesystem\Util::Pathify(
-			$this->AppRoot, 'data', 'deploy.index'
+			$this->DataRoot, 'deploy.index'
 		);
+
+		////////
+
+		$this->ConfigFile = Common\Filesystem\Util::Pathify(
+			$this->DataRoot, 'config.json'
+		);
+
+		if(!file_exists($this->ConfigFile))
+		MStackConfig::WriteDefaultFile($this->ConfigFile);
+
+		////////
+
+		$this->Cfg = MStackConfig::FromFile($this->ConfigFile);
+
+		if(!$this->Cfg->DestRoot)
+		throw new Common\Error\RequiredDataMissing(
+			'DestRoot',
+			'dirpath in config.json'
+		);
+
+		$this->DestRoot = $this->Cfg->DestRoot;
 
 		return;
 	}
