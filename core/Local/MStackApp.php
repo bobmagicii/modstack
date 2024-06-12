@@ -45,24 +45,39 @@ extends Console\Client {
 	////////////////////////////////////////////////////////////////
 	////////////////////////////////////////////////////////////////
 
-	#[Console\Meta\Command('deploy')]
+	#[Console\Meta\Command('list')]
 	public function
-	HandleDeploy():
+	HandleList(?Common\Datastore $Pre=NULL, ?Common\Datastore $Mods=NULL):
 	int {
 
-		$Pre = $this->IndexModFiles();
-		$Mods = $this->ShadowModFiles($Pre);
+		if(!$Pre || !$Mods) {
+			$Pre = $this->IndexModFiles();
+			$Mods = $this->ShadowModFiles($Pre);
+		}
+
 		$NumTotal = 0;
 		$NumFinal = 0;
 		$Mod = NULL;
+		$ModPath = NULL;
+		$ModStyle = NULL;
 
 		$ReportHead = [ 'Mod', 'Files', 'Overwritten' ];
 		$ReportBody = [];
 		$ReportStyle = [];
 
+		////////
+
 		foreach($Mods->Keys() as $Mod) {
 			$NumTotal += $Pre[$Mod]->Count();
 			$NumFinal += $Mods[$Mod]->Count();
+
+			$ModStyle = match(TRUE) {
+				(!$this->ShouldDeployMod($Mod))
+				=> Console\Theme::Muted,
+
+				default
+				=> Console\Theme::Default
+			};
 
 			$ReportBody[] = [
 				$Mod,
@@ -70,7 +85,7 @@ extends Console\Client {
 				($Pre[$Mod]->Count() - $Mods[$Mod]->Count())
 			];
 
-			$ReportStyle[] = $this->Theme::Default;
+			$ReportStyle[] = $ModStyle;
 
 			continue;
 		}
@@ -79,6 +94,19 @@ extends Console\Client {
 		$ReportStyle[] = $this->Theme::Accent;
 
 		$this->PrintTable($ReportHead, $ReportBody, Styles: $ReportStyle);
+
+		return 0;
+	}
+
+	#[Console\Meta\Command('deploy')]
+	public function
+	HandleDeploy():
+	int {
+
+		$Pre = $this->IndexModFiles();
+		$Mods = $this->ShadowModFiles($Pre);
+
+		$this->HandleList($Pre, $Mods);
 
 		$this->CleanDestDir();
 		$this->DeployDestDir($Mods);
@@ -330,52 +358,103 @@ extends Console\Client {
 		$Files = NULL;
 		$File = NULL;
 
+		$Chunk = NULL;
+		$Iter = NULL;
+
+		////////
+
 		$this->PrintStatus(sprintf(
 			'%d files to deploy',
 			$FileCount
 		));
 
-		foreach($Mods as $Mod=> $Files)
-		foreach($Files as $File) {
+		foreach($Mods as $Mod=> $Files) {
 
-			$Origin = Common\Filesystem\Util::Pathify(
-				$this->SrcRoot,
-				$Mod, $File
-			);
+			$Chunk = (int)ceil($Files->Count() / 100);
+			$Iter = 0;
 
-			$Symlink = Common\Filesystem\Util::Pathify(
-				$this->DestRoot,
-				$File
-			);
+			if(!$this->ShouldDeployMod($Mod)) {
+				$this->PrintStatusMuted(sprintf('Skipping %s.', $Mod));
+				continue;
+			}
 
-			////////
+			$this->PrintStatus(sprintf('Deploying %s...', $Mod));
+			$this->DrawProgressBar($Iter, $Files->Count());
 
-			$BaseDir = dirname($Symlink);
+			foreach($Files as $File) {
+				$Iter += 1;
 
-			if(!is_dir($BaseDir))
-			Common\Filesystem\Util::MkDir($BaseDir);
+				if(($Iter % $Chunk) === 0)
+				$this->DrawProgressBar($Iter, $Files->Count());
 
-			////////
+				$Origin = Common\Filesystem\Util::Pathify(
+					$this->SrcRoot,
+					$Mod, $File
+				);
 
-			// starfield can see symlinks but not read them
-			// apparently.
+				$Symlink = Common\Filesystem\Util::Pathify(
+					$this->DestRoot,
+					$File
+				);
 
-			if(file_exists($Symlink))
-			unlink($Symlink);
+				////////
 
-			//symlink($Origin, $Symlink);
+				$BaseDir = dirname($Symlink);
 
-			system(sprintf(
-				'mklink /H %s %s >NUL',
-				escapeshellarg($Symlink),
-				escapeshellarg($Origin)
-			));
+				if(!is_dir($BaseDir))
+				Common\Filesystem\Util::MkDir($BaseDir);
 
-			fwrite($FPIndex, "{$File}\n");
+				////////
+
+				// starfield can see symlinks but not read them
+				// apparently.
+
+				if(file_exists($Symlink))
+				unlink($Symlink);
+
+				//symlink($Origin, $Symlink);
+
+				system(sprintf(
+					'mklink /H %s %s >NUL',
+					escapeshellarg($Symlink),
+					escapeshellarg($Origin)
+				));
+
+				fwrite($FPIndex, "{$File}\n");
+			}
+
+			$this->DrawProgressBar($Iter, $Files->Count());
+			$this->PrintLn('', 2);
 		}
 
 		fclose($FPIndex);
 		return;
+	}
+
+	protected function
+	DrawProgressBar(int $Cur, int $Total):
+	void {
+
+		$Per = ($Cur / $Total) * 100;
+
+		printf(
+			"\r%d of %d (%d%%)",
+			$Cur,
+			$Total,
+			$Per
+		);
+
+		return;
+	}
+
+	protected function
+	ShouldDeployMod(string $Mod):
+	bool {
+
+		if(str_ends_with($Mod, '- Off'))
+		return FALSE;
+
+		return TRUE;
 	}
 
 	////////////////////////////////////////////////////////////////
