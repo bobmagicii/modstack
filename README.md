@@ -30,8 +30,8 @@ when sorted the mod priority is pre-determined.
 
 List of all the links the application wrote to the destination directory.
 
+### {AppRoot}/data/config.json
 
+Application configuration file. At the very least you will need to set the
+DestRoot within this file.
 
-## Todo
-
-* A config file to define some application level choies. Like DestRoot.
